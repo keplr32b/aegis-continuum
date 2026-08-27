@@ -32,7 +32,6 @@ Deploy each file under `contracts/` on GenLayer Studionet from [studio.genlayer.
 
 ## Tests
 
-```bash
 python tests/test_aegis_continuum.py
 
 ## Docs

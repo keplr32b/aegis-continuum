@@ -1,0 +1,2 @@
+# Structural tests use stdlib only.
+# For GenLayer Direct / gltest: follow pins at docs.genlayer.com

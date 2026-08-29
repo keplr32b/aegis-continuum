@@ -1,4 +1,4 @@
-# Studionet E2E — Aegis Continuum
+# Studionet E2E - Aegis Continuum
 
 Real public HTTPS only (docs.genlayer.com / genlayer.com). No example.com success paths.
 

@@ -1,12 +1,14 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 """
-FreezeManifest — Aegis Continuum
-================================
+FreezeManifest — Aegis Continuum (fixed verify)
+===============================================
 
 Integrity primitive: seal a consensus fingerprint of allowlisted HTTPS
-content so later changes are detectable via verify().
+content; verify asks validators to judge MATCH against the sealed digest
+and the original URL manifest under comparative consensus.
 
-Not a price feed. Not escrow. Not one-shot Q&A.
+The final match decision is consensus-protected — not post-hoc exact
+string equality on free-form digest phrases.
 """
 
 from genlayer import *
@@ -55,12 +57,26 @@ def _host_of(url: str) -> str:
     return host
 
 
+def _normalize_url_list(urls: str) -> list:
+    raw = urls if isinstance(urls, str) else ""
+    url_list = [u.strip() for u in raw.split(",") if u.strip()]
+    require(1 <= len(url_list) <= 4, "need 1 to 4 comma-separated urls")
+    seen = {}
+    out = []
+    for u in url_list:
+        require(u not in seen, "duplicate url")
+        seen[u] = True
+        out.append(u)
+    return out
+
+
 @allow_storage
 @dataclass
 class Manifest:
     label: str
     digest: str
     sources_count: u256
+    urls_csv: str
     urls_hash: str
     summary: str
 
@@ -72,6 +88,7 @@ class VerifyResult:
     matched: bool
     prior_digest: str
     new_digest: str
+    note: str
 
 
 class FreezeManifest(gl.Contract):
@@ -80,11 +97,9 @@ class FreezeManifest(gl.Contract):
     manifests: TreeMap[str, Manifest]
     last_verify: TreeMap[str, VerifyResult]
     labels: DynArray[str]
-    tolerance_note: u256
 
     def __init__(self):
         self.owner = gl.message.sender_address
-        self.tolerance_note = u256(0)
 
     @gl.public.write
     def allow_host(self, host: str) -> None:
@@ -104,18 +119,13 @@ class FreezeManifest(gl.Contract):
             self.allowed_hosts[h] = False
 
     def _prepare_urls(self, urls: str) -> list:
-        raw_urls = urls if isinstance(urls, str) else ""
-        url_list = [u.strip() for u in raw_urls.split(",") if u.strip()]
-        require(1 <= len(url_list) <= 4, "need 1 to 4 comma-separated urls")
-        seen = {}
+        url_list = _normalize_url_list(urls)
         for u in url_list:
             host = _host_of(u)
             require(self.allowed_hosts.get(host, False) is True, "host not allowed: " + host)
-            require(u not in seen, "duplicate url")
-            seen[u] = True
         return url_list
 
-    def _extract_digest(self, url_list: list) -> str:
+    def _extract_seal(self, url_list: list) -> str:
         total = len(url_list)
         urls_for_nondet = list(url_list)
 
@@ -136,7 +146,7 @@ class FreezeManifest(gl.Contract):
                 + block
                 + "\n\n"
                 "Return ONLY strict JSON:\n"
-                '{ "digest": "<short stable fingerprint phrase 8-24 chars>", '
+                '{ "digest": "<short stable fingerprint phrase 8-48 chars>", '
                 '"summary": "<one short line>" }'
             )
             raw = gl.nondet.exec_prompt(prompt)
@@ -147,13 +157,64 @@ class FreezeManifest(gl.Contract):
             return canonical({"digest": digest, "summary": summary, "sources_count": total})
 
         principle = (
-            "EQUIVALENT if and only if: (1) 'digest' means the same content identity "
-            "(minor wording differences allowed if clearly same fingerprint intent), "
+            "EQUIVALENT if and only if: (1) 'digest' refers to the same content identity "
+            "(minor wording differences allowed if clearly the same fingerprint intent), "
             "(2) 'sources_count' is identical. If digests clearly refer to different "
             "content identities, NOT equivalent."
         )
-        agreed = gl.eq_principle.prompt_comparative(extract, principle)
-        return agreed
+        return gl.eq_principle.prompt_comparative(extract, principle)
+
+    def _judge_match(self, url_list: list, prior_digest: str) -> str:
+        total = len(url_list)
+        urls_for_nondet = list(url_list)
+        sealed = (prior_digest or "").strip().lower()
+
+        def judge() -> str:
+            parts = []
+            for i, u in enumerate(urls_for_nondet):
+                try:
+                    content = gl.nondet.web.render(u, mode="text")
+                    snippet = (content[:3000] if content else "[EMPTY PAGE]")
+                except Exception as e:
+                    snippet = ("[FETCH FAILED: " + str(e) + "]")[:240]
+                parts.append("SOURCE " + str(i + 1) + " (" + u + "):\n---\n" + snippet + "\n---")
+            block = "\n\n".join(parts)
+            prompt = (
+                "You verify content integrity against a SEALED fingerprint.\n\n"
+                "SEALED DIGEST: " + sealed + "\n\n"
+                "Current sources (" + str(total) + "):\n"
+                + block
+                + "\n\n"
+                "Decide if the current main content still matches the sealed content identity.\n"
+                "Ignore volatile timestamps, ads, cookie banners.\n"
+                "Return ONLY strict JSON:\n"
+                '{ "matched": true or false, '
+                '"new_digest": "<short fingerprint of current content 8-48 chars>", '
+                '"note": "<short reason>" }'
+            )
+            raw = gl.nondet.exec_prompt(prompt)
+            data = parse_json_response(raw)
+            matched = bool(data.get("matched", False))
+            new_digest = str(data.get("new_digest", "")).strip().lower()
+            if len(new_digest) < 8:
+                new_digest = "unspecified"
+            note = str(data.get("note", "")).strip()[:120]
+            return canonical(
+                {
+                    "matched": matched,
+                    "new_digest": new_digest,
+                    "note": note,
+                    "sources_count": total,
+                }
+            )
+
+        principle = (
+            "EQUIVALENT if and only if: (1) 'matched' is identical, "
+            "(2) 'sources_count' is identical. "
+            "Wording of new_digest/note may differ. "
+            "If matched differs, NOT equivalent."
+        )
+        return gl.eq_principle.prompt_comparative(judge, principle)
 
     @gl.public.write
     def freeze(self, label: str, urls: str) -> str:
@@ -162,18 +223,20 @@ class FreezeManifest(gl.Contract):
         require(lab not in self.manifests, "label already frozen")
 
         url_list = self._prepare_urls(urls)
-        agreed = self._extract_digest(url_list)
+        agreed = self._extract_seal(url_list)
         parsed = json.loads(agreed)
         digest = str(parsed["digest"]).strip().lower()
         summary = str(parsed.get("summary", "")).strip()[:160]
         sources_count = int(parsed["sources_count"])
         require(sources_count == len(url_list), "sources_count mismatch")
 
+        urls_csv = ",".join(url_list)
         urls_hash = canonical({"urls": url_list})
         self.manifests[lab] = Manifest(
             label=lab,
             digest=digest,
             sources_count=u256(sources_count),
+            urls_csv=urls_csv,
             urls_hash=urls_hash,
             summary=summary,
         )
@@ -187,25 +250,24 @@ class FreezeManifest(gl.Contract):
         prior = self.manifests[lab]
 
         url_list = self._prepare_urls(urls)
-        agreed = self._extract_digest(url_list)
+        # Enforce original URL manifest (order-sensitive join as sealed)
+        require(",".join(url_list) == prior.urls_csv, "url manifest mismatch")
+        require(canonical({"urls": url_list}) == prior.urls_hash, "url hash mismatch")
+
+        agreed = self._judge_match(url_list, prior.digest)
         parsed = json.loads(agreed)
-        new_digest = str(parsed["digest"]).strip().lower()
+        matched = bool(parsed["matched"])
+        new_digest = str(parsed.get("new_digest", "")).strip().lower()
+        note = str(parsed.get("note", "")).strip()[:120]
         sources_count = int(parsed["sources_count"])
         require(sources_count == len(url_list), "sources_count mismatch")
-
-        matched = new_digest == prior.digest or (
-            len(new_digest) > 0 and prior.digest in new_digest
-        ) or (
-            len(prior.digest) > 0 and new_digest in prior.digest
-        )
-        # Prefer exact match; soft containment only if exact fails but strings overlap strongly
-        matched = new_digest == prior.digest
 
         self.last_verify[lab] = VerifyResult(
             label=lab,
             matched=matched,
             prior_digest=prior.digest,
             new_digest=new_digest,
+            note=note,
         )
         return "MATCH" if matched else "MISMATCH"
 
@@ -219,6 +281,7 @@ class FreezeManifest(gl.Contract):
                 "label": m.label,
                 "digest": m.digest,
                 "sources_count": int(m.sources_count),
+                "urls_csv": m.urls_csv,
                 "urls_hash": m.urls_hash,
                 "summary": m.summary,
             }
@@ -235,6 +298,7 @@ class FreezeManifest(gl.Contract):
                 "matched": bool(v.matched),
                 "prior_digest": v.prior_digest,
                 "new_digest": v.new_digest,
+                "note": v.note,
                 "result": "MATCH" if v.matched else "MISMATCH",
             }
         )

@@ -148,7 +148,6 @@ class FreezeManifest(gl.Contract):
             rawp = gl.nondet.exec_prompt(prompt)
             data = parse_json_response(rawp)
             matched = bool(data.get("matched", False))
-            # fail-closed: if nothing fetched, force false
             if ok == 0:
                 matched = False
             note = str(data.get("note", "")).strip()[:120]

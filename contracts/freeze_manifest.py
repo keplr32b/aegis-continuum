@@ -1,19 +1,15 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 """
-FreezeManifest — Aegis Continuum (fixed verify)
-===============================================
+FreezeManifest — Aegis Continuum (storage-safe + consensus match)
+================================================================
 
-Integrity primitive: seal a consensus fingerprint of allowlisted HTTPS
-content; verify asks validators to judge MATCH against the sealed digest
-and the original URL manifest under comparative consensus.
-
-The final match decision is consensus-protected — not post-hoc exact
-string equality on free-form digest phrases.
+Seal HTTPS content fingerprint; verify judges MATCH under comparative
+consensus against sealed digest + original URL manifest.
+Primitive TreeMaps only (no nested dataclass storage).
 """
 
 from genlayer import *
 import json
-from dataclasses import dataclass
 
 
 try:
@@ -70,33 +66,20 @@ def _normalize_url_list(urls: str) -> list:
     return out
 
 
-@allow_storage
-@dataclass
-class Manifest:
-    label: str
-    digest: str
-    sources_count: u256
-    urls_csv: str
-    urls_hash: str
-    summary: str
-
-
-@allow_storage
-@dataclass
-class VerifyResult:
-    label: str
-    matched: bool
-    prior_digest: str
-    new_digest: str
-    note: str
-
-
 class FreezeManifest(gl.Contract):
     owner: Address
     allowed_hosts: TreeMap[str, bool]
-    manifests: TreeMap[str, Manifest]
-    last_verify: TreeMap[str, VerifyResult]
+    # primitive storage only
+    digest_of: TreeMap[str, str]
+    urls_csv_of: TreeMap[str, str]
+    urls_hash_of: TreeMap[str, str]
+    summary_of: TreeMap[str, str]
+    sources_of: TreeMap[str, u256]
     labels: DynArray[str]
+    # last verify
+    verify_matched: TreeMap[str, bool]
+    verify_new_digest: TreeMap[str, str]
+    verify_note: TreeMap[str, str]
 
     def __init__(self):
         self.owner = gl.message.sender_address
@@ -220,7 +203,7 @@ class FreezeManifest(gl.Contract):
     def freeze(self, label: str, urls: str) -> str:
         lab = (label if isinstance(label, str) else "").strip()
         require(1 <= len(lab) <= 64, "bad label")
-        require(lab not in self.manifests, "label already frozen")
+        require(len(self.digest_of.get(lab, "")) == 0, "label already frozen")
 
         url_list = self._prepare_urls(urls)
         agreed = self._extract_seal(url_list)
@@ -232,29 +215,28 @@ class FreezeManifest(gl.Contract):
 
         urls_csv = ",".join(url_list)
         urls_hash = canonical({"urls": url_list})
-        self.manifests[lab] = Manifest(
-            label=lab,
-            digest=digest,
-            sources_count=u256(sources_count),
-            urls_csv=urls_csv,
-            urls_hash=urls_hash,
-            summary=summary,
-        )
+
+        self.digest_of[lab] = digest
+        self.urls_csv_of[lab] = urls_csv
+        self.urls_hash_of[lab] = urls_hash
+        self.summary_of[lab] = summary
+        self.sources_of[lab] = u256(sources_count)
         self.labels.append(lab)
         return digest
 
     @gl.public.write
     def verify(self, label: str, urls: str) -> str:
         lab = (label if isinstance(label, str) else "").strip()
-        require(lab in self.manifests, "unknown label")
-        prior = self.manifests[lab]
+        prior = self.digest_of.get(lab, "")
+        require(len(prior) > 0, "unknown label")
 
         url_list = self._prepare_urls(urls)
-        # Enforce original URL manifest (order-sensitive join as sealed)
-        require(",".join(url_list) == prior.urls_csv, "url manifest mismatch")
-        require(canonical({"urls": url_list}) == prior.urls_hash, "url hash mismatch")
+        sealed_csv = self.urls_csv_of.get(lab, "")
+        sealed_hash = self.urls_hash_of.get(lab, "")
+        require(",".join(url_list) == sealed_csv, "url manifest mismatch")
+        require(canonical({"urls": url_list}) == sealed_hash, "url hash mismatch")
 
-        agreed = self._judge_match(url_list, prior.digest)
+        agreed = self._judge_match(url_list, prior)
         parsed = json.loads(agreed)
         matched = bool(parsed["matched"])
         new_digest = str(parsed.get("new_digest", "")).strip().lower()
@@ -262,44 +244,40 @@ class FreezeManifest(gl.Contract):
         sources_count = int(parsed["sources_count"])
         require(sources_count == len(url_list), "sources_count mismatch")
 
-        self.last_verify[lab] = VerifyResult(
-            label=lab,
-            matched=matched,
-            prior_digest=prior.digest,
-            new_digest=new_digest,
-            note=note,
-        )
+        self.verify_matched[lab] = matched
+        self.verify_new_digest[lab] = new_digest
+        self.verify_note[lab] = note
         return "MATCH" if matched else "MISMATCH"
 
     @gl.public.view
     def read_manifest(self, label: str) -> str:
         lab = (label if isinstance(label, str) else "").strip()
-        require(lab in self.manifests, "unknown label")
-        m = self.manifests[lab]
+        d = self.digest_of.get(lab, "")
+        require(len(d) > 0, "unknown label")
         return canonical(
             {
-                "label": m.label,
-                "digest": m.digest,
-                "sources_count": int(m.sources_count),
-                "urls_csv": m.urls_csv,
-                "urls_hash": m.urls_hash,
-                "summary": m.summary,
+                "label": lab,
+                "digest": d,
+                "sources_count": int(self.sources_of.get(lab, u256(0))),
+                "urls_csv": self.urls_csv_of.get(lab, ""),
+                "urls_hash": self.urls_hash_of.get(lab, ""),
+                "summary": self.summary_of.get(lab, ""),
             }
         )
 
     @gl.public.view
     def read_last_verify(self, label: str) -> str:
         lab = (label if isinstance(label, str) else "").strip()
-        require(lab in self.last_verify, "no verify yet")
-        v = self.last_verify[lab]
+        require(lab in self.verify_matched, "no verify yet")
+        matched = bool(self.verify_matched[lab])
         return canonical(
             {
-                "label": v.label,
-                "matched": bool(v.matched),
-                "prior_digest": v.prior_digest,
-                "new_digest": v.new_digest,
-                "note": v.note,
-                "result": "MATCH" if v.matched else "MISMATCH",
+                "label": lab,
+                "matched": matched,
+                "prior_digest": self.digest_of.get(lab, ""),
+                "new_digest": self.verify_new_digest.get(lab, ""),
+                "note": self.verify_note.get(lab, ""),
+                "result": "MATCH" if matched else "MISMATCH",
             }
         )
 

@@ -1,10 +1,9 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 """
-FreezeManifest — Aegis Continuum (single-seal, consensus match)
-==============================================================
-
-One sealed HTTPS manifest per deployment.
-Verify: validators consensus on matched bool vs sealed digest + exact URL manifest.
+FreezeManifest — Aegis Continuum
+================================
+Deterministic seal of URL manifest.
+Verify: comparative consensus on matched bool vs live fetch + sealed URLs.
 """
 
 from genlayer import *
@@ -56,27 +55,21 @@ class FreezeManifest(gl.Contract):
     owner: Address
     allowed_hosts: TreeMap[str, bool]
     sealed: bool
-    digest: str
     urls_csv: str
     urls_hash: str
-    summary: str
     sources_count: u256
     verified: bool
     last_matched: bool
-    last_new_digest: str
     last_note: str
 
     def __init__(self):
         self.owner = gl.message.sender_address
         self.sealed = False
-        self.digest = ""
         self.urls_csv = ""
         self.urls_hash = ""
-        self.summary = ""
         self.sources_count = u256(0)
         self.verified = False
         self.last_matched = False
-        self.last_new_digest = ""
         self.last_note = ""
 
     @gl.public.write
@@ -91,6 +84,7 @@ class FreezeManifest(gl.Contract):
 
     @gl.public.write
     def freeze(self, urls: str) -> str:
+        """Deterministic seal — no LLM. Avoids Undetermined on free-form digests."""
         require(not self.sealed, "already sealed")
         raw = urls if isinstance(urls, str) else ""
         url_list = [u.strip() for u in raw.split(",") if u.strip()]
@@ -102,61 +96,19 @@ class FreezeManifest(gl.Contract):
             host = _host_of(u)
             require(self.allowed_hosts.get(host, False) is True, "host not allowed: " + host)
 
-        total = len(url_list)
-        urls_for_nondet = list(url_list)
-
-        def extract() -> str:
-            parts = []
-            for i, u in enumerate(urls_for_nondet):
-                try:
-                    content = gl.nondet.web.render(u, mode="text")
-                    snippet = (content[:3000] if content else "[EMPTY PAGE]")
-                except Exception as e:
-                    snippet = ("[FETCH FAILED: " + str(e) + "]")[:240]
-                parts.append("SOURCE " + str(i + 1) + " (" + u + "):\n---\n" + snippet + "\n---")
-            block = "\n\n".join(parts)
-            prompt = (
-                "You fingerprint the COMBINED content for integrity checking.\n"
-                "Ignore volatile timestamps, ads, cookie banners.\n"
-                "Focus on stable main content identity.\n\n"
-                + block
-                + "\n\nReturn ONLY strict JSON:\n"
-                '{ "digest": "<short stable fingerprint 8-48 chars>", '
-                '"summary": "<one short line>" }'
-            )
-            rawp = gl.nondet.exec_prompt(prompt)
-            data = parse_json_response(rawp)
-            digest = str(data.get("digest", "")).strip().lower()
-            require(8 <= len(digest) <= 64, "bad digest length")
-            summary = str(data.get("summary", "")).strip()[:160]
-            return canonical({"digest": digest, "summary": summary, "sources_count": total})
-
-        principle = (
-            "EQUIVALENT iff: (1) digest means the same content identity "
-            "(minor wording OK if same intent), (2) sources_count identical. "
-            "Different identities => NOT equivalent."
-        )
-        agreed = gl.eq_principle.prompt_comparative(extract, principle)
-        parsed = json.loads(agreed)
-        digest = str(parsed["digest"]).strip().lower()
-        summary = str(parsed.get("summary", "")).strip()[:160]
-        sources_count = int(parsed["sources_count"])
-        require(sources_count == total, "sources_count mismatch")
-
-        self.digest = digest
         self.urls_csv = ",".join(url_list)
         self.urls_hash = canonical({"urls": url_list})
-        self.summary = summary
-        self.sources_count = u256(sources_count)
+        self.sources_count = u256(len(url_list))
         self.sealed = True
-        return digest
+        return self.urls_hash
 
     @gl.public.write
     def verify(self, urls: str) -> str:
+        """Consensus on matched bool; enforce sealed URL manifest."""
         require(self.sealed, "not sealed")
         raw = urls if isinstance(urls, str) else ""
         url_list = [u.strip() for u in raw.split(",") if u.strip()]
-        require(1 <= len(url_list) <= 4, "need 1 to 4 comma-separated urls")
+        require(1 <= len(url_list) <= 4, "need 1 to 4 urls")
         for u in url_list:
             host = _host_of(u)
             require(self.allowed_hosts.get(host, False) is True, "host not allowed: " + host)
@@ -165,58 +117,54 @@ class FreezeManifest(gl.Contract):
 
         total = len(url_list)
         urls_for_nondet = list(url_list)
-        sealed = self.digest
+        sealed_csv = self.urls_csv
 
         def judge() -> str:
             parts = []
+            ok = 0
             for i, u in enumerate(urls_for_nondet):
                 try:
                     content = gl.nondet.web.render(u, mode="text")
-                    snippet = (content[:3000] if content else "[EMPTY PAGE]")
+                    snippet = (content[:3000] if content else "")
+                    if snippet.strip():
+                        ok += 1
+                    else:
+                        snippet = "[EMPTY PAGE]"
                 except Exception as e:
                     snippet = ("[FETCH FAILED: " + str(e) + "]")[:240]
                 parts.append("SOURCE " + str(i + 1) + " (" + u + "):\n---\n" + snippet + "\n---")
             block = "\n\n".join(parts)
             prompt = (
-                "Verify content integrity against SEALED fingerprint.\n\n"
-                "SEALED DIGEST: " + sealed + "\n\n"
-                "Current sources:\n" + block + "\n\n"
-                "Does current main content match sealed identity? "
-                "Ignore timestamps/ads/cookies.\n"
+                "Integrity check against a SEALED URL manifest.\n"
+                "SEALED URLS: " + sealed_csv + "\n\n"
+                + block
+                + "\n\n"
+                "matched=true only if every sealed source fetches non-empty main content "
+                "and still looks like the same site/docs identity (ignore ads/timestamps).\n"
+                "matched=false if fetch fails, empty, or clearly different/broken content.\n"
                 "Return ONLY strict JSON:\n"
-                '{ "matched": true or false, '
-                '"new_digest": "<short fingerprint 8-48 chars>", '
-                '"note": "<short reason>" }'
+                '{ "matched": true or false, "note": "<short reason>" }'
             )
             rawp = gl.nondet.exec_prompt(prompt)
             data = parse_json_response(rawp)
             matched = bool(data.get("matched", False))
-            new_digest = str(data.get("new_digest", "")).strip().lower()
-            if len(new_digest) < 8:
-                new_digest = "unspecified"
+            # fail-closed: if nothing fetched, force false
+            if ok == 0:
+                matched = False
             note = str(data.get("note", "")).strip()[:120]
-            return canonical(
-                {
-                    "matched": matched,
-                    "new_digest": new_digest,
-                    "note": note,
-                    "sources_count": total,
-                }
-            )
+            return canonical({"matched": matched, "note": note, "sources_count": total})
 
         principle = (
-            "EQUIVALENT iff: (1) matched identical, (2) sources_count identical. "
-            "new_digest/note wording may differ. matched differs => NOT equivalent."
+            "EQUIVALENT iff: (1) matched is identical, (2) sources_count is identical. "
+            "note may differ. If matched differs => NOT equivalent."
         )
         agreed = gl.eq_principle.prompt_comparative(judge, principle)
         parsed = json.loads(agreed)
         matched = bool(parsed["matched"])
-        new_digest = str(parsed.get("new_digest", "")).strip().lower()
         note = str(parsed.get("note", "")).strip()[:120]
         require(int(parsed["sources_count"]) == total, "sources_count mismatch")
 
         self.last_matched = matched
-        self.last_new_digest = new_digest
         self.last_note = note
         self.verified = True
         return "MATCH" if matched else "MISMATCH"
@@ -230,10 +178,8 @@ class FreezeManifest(gl.Contract):
         require(self.sealed, "not sealed")
         return canonical(
             {
-                "digest": self.digest,
                 "urls_csv": self.urls_csv,
                 "urls_hash": self.urls_hash,
-                "summary": self.summary,
                 "sources_count": int(self.sources_count),
             }
         )
@@ -244,8 +190,6 @@ class FreezeManifest(gl.Contract):
         return canonical(
             {
                 "matched": bool(self.last_matched),
-                "prior_digest": self.digest,
-                "new_digest": self.last_new_digest,
                 "note": self.last_note,
                 "result": "MATCH" if self.last_matched else "MISMATCH",
             }
@@ -254,7 +198,7 @@ class FreezeManifest(gl.Contract):
     @gl.public.view
     def is_host_allowed(self, host: str) -> bool:
         h = (host or "").strip().lower()
-        return self.allowed_hosts.get(host, False) is True
+        return self.allowed_hosts.get(h, False) is True
 
     @gl.public.view
     def get_owner(self) -> Address:

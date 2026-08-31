@@ -11,16 +11,16 @@ Real public HTTPS only (docs.genlayer.com / genlayer.com). No example.com succes
 | pulse SUCCESS | `https://docs.genlayer.com` → status `ALIVE`, ratio_milli `1000`, `is_alive` true, count `1` |
 | Fail-closed | `pulse(https://example.com)` → ERROR `[rollback] host not allowed: example.com` tx `0xed5cbe45d0bcffde7928912f60f555eab244af0754c0110b4531cd5ff5e8fa6f` |
 
-## FreezeManifest
+## FreezeManifest (rejection fix)
 
 | Item | Value |
 |------|--------|
-| Contract | [`0x6fF53b22a419d3b8FDC0CBbCb5883Aa17bBCd033`](https://explorer-studio.genlayer.com/address/0x6fF53b22a419d3b8FDC0CBbCb5883Aa17bBCd033) |
-| Deploy tx | [`0x7e75b387cd56695a85f31df2871bc965cbcf68e9b90210cbc135a12be6581aaa`](https://explorer-studio.genlayer.com/tx/0x7e75b387cd56695a85f31df2871bc965cbcf68e9b90210cbc135a12be6581aaa) |
-| freeze SUCCESS | label `genlayer-docs`, url `https://docs.genlayer.com`, digest sealed |
-| verify | same URL → `MISMATCH` (LLM digest variance; strict exact match — documented limit) |
-| Fail-closed | `freeze(should-fail, https://example.com)` → ERROR `host not allowed` tx `0xc12d22caf8907aea5387445f5866cffcb33bd389f9333c5322d6a9abf32f23cc` |
-
+| Contract | [`0xC9a1324cAF21c51F2A498C34356919bEaC69Ff15`](https://explorer-studio.genlayer.com/address/0xC9a1324cAF21c51F2A498C34356919bEaC69Ff15) |
+| Deploy | [`0xf2cd23f8861b413a8e46ca97369f92a283daf8c90064327328d7e5761e6f73aa`](https://explorer-studio.genlayer.com/tx/0xf2cd23f8861b413a8e46ca97369f92a283daf8c90064327328d7e5761e6f73aa) |
+| Design | Deterministic URL-manifest seal; verify = comparative consensus on `matched` (not post-hoc digest equality); sealed URLs enforced |
+| freeze | [`0xb33d016b…`](https://explorer-studio.genlayer.com/tx/0xb33d016b48cd65d1aa895925503130ee9a5861e40f9e1efcfc42f87cd58b1143) Accepted → `is_sealed` true |
+| verify MATCH | [`0xe27e96dc…`](https://explorer-studio.genlayer.com/tx/0xe27e96dc31b97fcc4c1c9ae71880122ca2cce3430be85948e1cedd43efee645e) → `MATCH` |
+| url manifest fail | [`0x042238b2…`](https://explorer-studio.genlayer.com/tx/0x042238b2d5c72a93bc4007341399bbd23201fc24c07d3781f7826d868ecb2aae) → `url manifest mismatch` |
 ## ThresholdGate
 
 | Item | Value |

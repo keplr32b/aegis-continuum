@@ -11,16 +11,17 @@ Real public HTTPS only (docs.genlayer.com / genlayer.com). No example.com succes
 | pulse SUCCESS | `https://docs.genlayer.com` → status `ALIVE`, ratio_milli `1000`, `is_alive` true, count `1` |
 | Fail-closed | `pulse(https://example.com)` → ERROR `[rollback] host not allowed: example.com` tx `0xed5cbe45d0bcffde7928912f60f555eab244af0754c0110b4531cd5ff5e8fa6f` |
 
-## FreezeManifest (rejection fix)
+## FreezeManifest (resubmit build)
 
 | Item | Value |
 |------|--------|
-| Contract | [`0xC9a1324cAF21c51F2A498C34356919bEaC69Ff15`](https://explorer-studio.genlayer.com/address/0xC9a1324cAF21c51F2A498C34356919bEaC69Ff15) |
-| Deploy | [`0xf2cd23f8861b413a8e46ca97369f92a283daf8c90064327328d7e5761e6f73aa`](https://explorer-studio.genlayer.com/tx/0xf2cd23f8861b413a8e46ca97369f92a283daf8c90064327328d7e5761e6f73aa) |
-| Design | Deterministic URL-manifest seal; verify = comparative consensus on `matched` (not post-hoc digest equality); sealed URLs enforced |
-| freeze | [`0xb33d016b…`](https://explorer-studio.genlayer.com/tx/0xb33d016b48cd65d1aa895925503130ee9a5861e40f9e1efcfc42f87cd58b1143) Accepted → `is_sealed` true |
-| verify MATCH | [`0xe27e96dc…`](https://explorer-studio.genlayer.com/tx/0xe27e96dc31b97fcc4c1c9ae71880122ca2cce3430be85948e1cedd43efee645e) → `MATCH` |
-| url manifest fail | [`0x042238b2…`](https://explorer-studio.genlayer.com/tx/0x042238b2d5c72a93bc4007341399bbd23201fc24c07d3781f7826d868ecb2aae) → `url manifest mismatch` |
+| Contract | [`0x85C307f9959a8725756580DC62E0649Cc4c24588`](https://explorer-studio.genlayer.com/address/0x85C307f9959a8725756580DC62E0649Cc4c24588) |
+| Deploy | [`0x881bb7da002ba12928e2fa4f8b6c0b7b0af8c74cc946ebc665fda277ab1febcf`](https://explorer-studio.genlayer.com/tx/0x881bb7da002ba12928e2fa4f8b6c0b7b0af8c74cc946ebc665fda277ab1febcf) |
+| freeze | [`0x5f8d80de…`](https://explorer-studio.genlayer.com/tx/0x5f8d80de6c22e1822ef3ee8aed3024c532b1344170ce0c8247bfbc58e06d6285) |
+| verify MATCH | [`0x8ccd4331…`](https://explorer-studio.genlayer.com/tx/0x8ccd4331e62ec358a1fa63ccf2e4d803a2ba743c099e858bdf9ee9f05fcab7b1) |
+| wrong host | [`0xa719b304…`](https://explorer-studio.genlayer.com/tx/0xa719b304942de789711f14068bb0dd91cc497189de25d328efecb920e5f8f2dc) host not allowed |
+
+
 ## ThresholdGate
 
 | Item | Value |

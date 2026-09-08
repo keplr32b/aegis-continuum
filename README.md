@@ -9,7 +9,7 @@ Not a one-shot Q&A oracle. Not escrow. Continuity and integrity rails other cont
 | Module | Contract |
 |--------|----------|
 | PulseSentinel | [`0x8A1e9FfaC1F42985B19C8B7819ED62419A1e01F0`](https://explorer-studio.genlayer.com/address/0x8A1e9FfaC1F42985B19C8B7819ED62419A1e01F0) |
-| FreezeManifest | [`0xC9a1324cAF21c51F2A498C34356919bEaC69Ff15`](https://explorer-studio.genlayer.com/address/0xC9a1324cAF21c51F2A498C34356919bEaC69Ff15) |
+| FreezeManifest| [`0x85C307f9959a8725756580DC62E0649Cc4c24588`](https://explorer-studio.genlayer.com/address/0x85C307f9959a8725756580DC62E0649Cc4c24588) |
 | ThresholdGate | [`0xC292EE9448DabF9841CE0B52Dd394C6b4f8B18EB`](https://explorer-studio.genlayer.com/address/0xC292EE9448DabF9841CE0B52Dd394C6b4f8B18EB) |
 
 Full receipts: [`verification/studionet-e2e.md`](verification/studionet-e2e.md)

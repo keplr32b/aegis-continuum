@@ -17,9 +17,11 @@ Real public HTTPS only (docs.genlayer.com / genlayer.com). No example.com succes
 |------|--------|
 | Contract | [`0x85C307f9959a8725756580DC62E0649Cc4c24588`](https://explorer-studio.genlayer.com/address/0x85C307f9959a8725756580DC62E0649Cc4c24588) |
 | Deploy | [`0x881bb7da002ba12928e2fa4f8b6c0b7b0af8c74cc946ebc665fda277ab1febcf`](https://explorer-studio.genlayer.com/tx/0x881bb7da002ba12928e2fa4f8b6c0b7b0af8c74cc946ebc665fda277ab1febcf) |
-| freeze | [`0x5f8d80de…`](https://explorer-studio.genlayer.com/tx/0x5f8d80de6c22e1822ef3ee8aed3024c532b1344170ce0c8247bfbc58e06d6285) |
-| verify MATCH | [`0x8ccd4331…`](https://explorer-studio.genlayer.com/tx/0x8ccd4331e62ec358a1fa63ccf2e4d803a2ba743c099e858bdf9ee9f05fcab7b1) |
-| wrong host | [`0xa719b304…`](https://explorer-studio.genlayer.com/tx/0xa719b304942de789711f14068bb0dd91cc497189de25d328efecb920e5f8f2dc) host not allowed |
+| freeze | [`0x5f8d80de6c22e1822ef3ee8aed3024c532b1344170ce0c8247bfbc58e06d6285`](https://explorer-studio.genlayer.com/tx/0x5f8d80de6c22e1822ef3ee8aed3024c532b1344170ce0c8247bfbc58e06d6285) |
+| verify MATCH | [`0x8ccd4331e62ec358a1fa63ccf2e4d803a2ba743c099e858bdf9ee9f05fcab7b1`](https://explorer-studio.genlayer.com/tx/0x8ccd4331e62ec358a1fa63ccf2e4d803a2ba743c099e858bdf9ee9f05fcab7b1) |
+| wrong host | [`0xa719b304942de789711f14068bb0dd91cc497189de25d328efecb920e5f8f2dc`](https://explorer-studio.genlayer.com/tx/0xa719b304942de789711f14068bb0dd91cc497189de25d328efecb920e5f8f2dc) — host not allowed |
+
+Mechanism: deterministic `freeze` seal; `verify` consensus on `matched` bool (not phrase equality).
 
 
 ## ThresholdGate

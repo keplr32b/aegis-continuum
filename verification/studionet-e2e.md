@@ -34,5 +34,5 @@ Real public HTTPS only (docs.genlayer.com / genlayer.com). No example.com succes
 ## Notes
 
 - All three modules share allowlist + HTTPS hygiene + fail-closed host rejection.
-- Freeze verify MISMATCH is honest strict fingerprinting under non-deterministic LLM digests; freeze seal and host rejection still hold.
+- FreezeManifest: `freeze` is deterministic URL seal only; `verify` uses comparative consensus on `matched` bool (note non-binding); MATCH/MISMATCH follows agreed `matched`, not post-hoc phrase equality.
 - Studionet development network; not a production SLA.
